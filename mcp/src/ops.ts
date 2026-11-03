@@ -169,7 +169,7 @@ export class Ops {
     },
   ): Promise<string> {
     return this.execute(ctx, 'create_note', async () => {
-      const folder = this.folderPath(a.folder ?? this.cfg.inboxFolder);
+      const folder = this.folderPath(a.folder?.trim() ? a.folder : this.cfg.inboxFolder);
       let base = titleToFileName(a.title);
       const today = this.today();
       if (folder === this.cfg.reportFolder && !/^\d{4}-\d{2}-\d{2}/.test(base)) base = `${today} ${base}`;

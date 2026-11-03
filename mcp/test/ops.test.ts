@@ -25,6 +25,11 @@ describe('write tools', () => {
     expect(gitLog(s.vaultDir)[0]).toContain('create_note');
   });
 
+  it('uses 00-Inbox when folder is empty', async () => {
+    const s = await setup();
+    expect(await s.ops.createNote(user, { title: 'Sans dossier', content: 'x', folder: '' })).toContain('00-Inbox/Sans dossier.md');
+  });
+
   it('refuses duplicates and repeated captures', async () => {
     const s = await setup();
     await s.ops.createNote(user, { title: 'Réseaux Docker Compose', content: 'a', capture_id: 'sess1:reseaux' });
