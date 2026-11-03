@@ -111,7 +111,9 @@ describe('agent endpoint', () => {
     expect(report.body).toContain('- erreur test');
     expect(await s.ops.agent.active()).toBeNull();
     const log = gitLog(s.vaultDir);
-    expect(log).toContain('[agent] avant passage (modifications des appareils)');
+    // Markers always exist, so `git revert avant..après` undoes exactly one run.
+    expect(log[0]).toBe('[agent] après passage');
+    expect(log).toContain('[agent] avant passage');
   });
 
   it('applies writes in real mode with a per-run limit and agent restrictions', async () => {

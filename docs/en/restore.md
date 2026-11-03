@@ -26,7 +26,10 @@ Partial restore: `--only vault`, `--only couchdb`, `--only state`, `--only confi
 ```bash
 G="docker compose exec mcp git -c user.name=AIsidian -c user.email=aisidian@localhost -C /vault"
 $G log --oneline --grep='\[agent\]' -n 10
-$G revert --no-edit BEFORE..AFTER
+$G revert --no-commit BEFORE..AFTER
+$G commit -m "Undo agent run (BEFORE..AFTER)"
 ```
+
+`--no-commit` groups the undo into one commit (and avoids `git revert` stopping on the empty marker commits). Device commits made during the run are undone too: check with `$G show --stat HEAD`.
 
 LiveSync propagates the restored files to the devices.

@@ -9,7 +9,9 @@ set -eu
 . /usr/local/bin/lib.sh
 require_env RESTIC_PASSWORD
 
-if [ "${1:-}" = "list" ]; then exec restic snapshots --host "$RESTIC_HOST" --tag aisidian; fi
+# The repository is mounted read-only for restores: never take a lock
+# (writers are stopped during a restore, see scripts/restore-stack.sh).
+if [ "${1:-}" = "list" ]; then exec restic --no-lock snapshots --host "$RESTIC_HOST" --tag aisidian; fi
 
 snapshot=${1:-latest}
 shift || true
@@ -28,7 +30,7 @@ has() { case ",$only," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 target="${WORK_DIR}-restore"
 rm -rf "$target" && mkdir -p "$target"
 log "restoring snapshot ${snapshot} to staging area"
-restic restore "$snapshot" --host "$RESTIC_HOST" --tag aisidian --target "$target"
+restic --no-lock restore "$snapshot" --host "$RESTIC_HOST" --tag aisidian --target "$target"
 src="${target}${DATA_DIR}"
 
 if has vault; then

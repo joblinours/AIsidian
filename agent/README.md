@@ -23,4 +23,4 @@ Termine toujours par write_report, puis réponds avec un résumé de 5 lignes ma
 3. Active la notification push de la tâche.
 4. Laisse `AGENT_MODE=simulation` pendant 3 nuits, lis les rapports dans `40-Journal/`, puis passe `AGENT_MODE=real` dans la stack et redéploie.
 
-Annuler une nuit : `git -C <vault> log --oneline` puis `git revert --no-edit <après>…<avant>` sur la plage entre les commits `[agent] avant passage` et `[agent] après passage` (voir `docs/fr/restauration.md`).
+Annuler une nuit : `git -C <vault> log --oneline` puis `git revert --no-commit AVANT..APRES && git commit`, où AVANT et APRES sont les commits `[agent] avant passage` et `[agent] après passage` de la nuit (voir `docs/fr/restauration.md`).

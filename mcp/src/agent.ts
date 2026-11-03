@@ -51,9 +51,8 @@ export class AgentRuns {
   async start(): Promise<NonNullable<AgentState['run']>> {
     const current = await this.active();
     if (current) return current;
-    const startSha = await this.git.commitAll('[agent] avant passage (modifications des appareils)').then(
-      async (sha) => sha ?? (await this.git.head()),
-    );
+    // Always-present marker: `git revert <avant>..<après>` undoes exactly one run.
+    const startSha = await this.git.commitAll('[agent] avant passage', { allowEmpty: true });
     return this.store.update((s) => {
       s.run = {
         id: new Date().toISOString(),
@@ -96,7 +95,7 @@ export class AgentRuns {
   }
 
   async finish(reportPath: string): Promise<{ endSha: string | null; run: AgentState['run'] }> {
-    const endSha = (await this.git.commitAll('[agent] après passage')) ?? (await this.git.head());
+    const endSha = await this.git.commitAll('[agent] après passage', { allowEmpty: true });
     return this.store.update((s) => {
       const run = s.run;
       const now = new Date().toISOString();

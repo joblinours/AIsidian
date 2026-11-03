@@ -78,11 +78,14 @@ export class Git {
     return this.head();
   }
 
-  /** Commits every pending change in the vault. Returns the new SHA or null if clean. */
-  async commitAll(message: string): Promise<string | null> {
+  /**
+   * Commits every pending change in the vault. Returns the new SHA, or null if
+   * clean (unless allowEmpty: used for agent run markers, which must always exist).
+   */
+  async commitAll(message: string, opts: { allowEmpty?: boolean } = {}): Promise<string | null> {
     await this.git(['add', '-A']);
     const staged = await this.git(['diff', '--cached', '--name-only']);
-    if (!staged.trim() && (await this.head())) return null;
+    if (!staged.trim() && !opts.allowEmpty && (await this.head())) return null;
     await this.git(['commit', '-q', '--no-verify', '--allow-empty', '-m', message]);
     return this.head();
   }

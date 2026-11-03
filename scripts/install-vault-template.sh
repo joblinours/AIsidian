@@ -13,10 +13,24 @@ cp -R "$root/vault-template/." "$tmp/"
 mkdir -p "$tmp/99-Système/Agent"
 cp "$root/agent/"*.md "$tmp/99-Système/Agent/"
 rm -f "$tmp/99-Système/Agent/README.md"
+# mktemp creates a 0700 directory: the container user (PUID) must be able to read it.
+chmod -R a+rX "$tmp"
 
-$COMPOSE run --rm --no-deps -v "$tmp:/template:ro" --entrypoint sh mcp -c "
-  cp -Rn /template/. /vault/
-  if [ '$update_agent' = yes ]; then cp -R /template/99-Système/Agent/. '/vault/99-Système/Agent/'; fi
-  echo 'vault template installed'
-"
+# File by file: BusyBox `cp -Rn dir/. dest/` silently skips everything when dest exists.
+# shellcheck disable=SC2016
+$COMPOSE run --rm --no-deps -e UPDATE_AGENT="$update_agent" -v "$tmp:/template:ro" --entrypoint sh mcp -c '
+  set -eu
+  cd /template
+  find . -type d | while IFS= read -r d; do mkdir -p "/vault/$d"; done
+  find . -type f > /tmp/template-files
+  added=0
+  while IFS= read -r f; do
+    case "$f" in ./99-Système/Agent/*) agent=yes ;; *) agent=no ;; esac
+    if [ ! -e "/vault/$f" ] || { [ "$agent" = yes ] && [ "$UPDATE_AGENT" = yes ]; }; then
+      cp "$f" "/vault/$f"
+      added=$((added + 1))
+    fi
+  done < /tmp/template-files
+  echo "vault template installed ($added files written)"
+'
 rm -rf "$tmp"

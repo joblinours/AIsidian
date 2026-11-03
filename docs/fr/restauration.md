@@ -44,7 +44,10 @@ Le test T12 (restauration complète chronométrée) doit être fait **avant** la
 G="docker compose exec mcp git -c user.name=AIsidian -c user.email=aisidian@localhost -C /vault"
 $G log --oneline --grep='\[agent\]' -n 10
 # repérer AVANT = commit "[agent] avant passage" et APRES = commit "[agent] après passage" de la nuit
-$G revert --no-edit AVANT..APRES
+$G revert --no-commit AVANT..APRES
+$G commit -m "Annulation du passage de l'agent (AVANT..APRES)"
 ```
+
+`--no-commit` regroupe l'annulation en un seul commit (et évite l'arrêt de `git revert` sur les commits marqueurs vides). Les commits des appareils faits pendant le passage sont aussi annulés : vérifie avec `$G show --stat HEAD`.
 
 Les fichiers restaurés sont propagés aux appareils par LiveSync. Pour une seule note : `$G log --oneline -- "30-Connaissances/Ma note.md"` puis `$G checkout <commit> -- "30-Connaissances/Ma note.md"` et `$G commit -m "restauration"`.
