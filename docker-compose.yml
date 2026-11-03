@@ -1,0 +1,188 @@
+# AIsidian — reference stack (Portainer or `docker compose`).
+# Every infrastructure-specific value comes from environment variables (.env.example).
+name: aisidian
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # One-shot: gives the shared volumes to PUID:PGID so every container agrees on file ownership.
+  volumes-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "chown ${PUID:-1000}:${PGID:-1000} /vault /mcp-state /backup-status /backup-cache /livesync-state && echo ok"]
+    volumes:
+      - vault:/vault
+      - mcp-state:/mcp-state
+      - backup-status:/backup-status
+      - backup-cache:/backup-cache
+      - livesync-state:/livesync-state
+    network_mode: none
+    restart: "no"
+
+  couchdb:
+    <<: *hardening
+    image: couchdb:${COUCHDB_TAG:-3.5}
+    environment:
+      COUCHDB_USER: ${COUCHDB_ADMIN_USER:?}
+      COUCHDB_PASSWORD: ${COUCHDB_ADMIN_PASSWORD:?}
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+    ports:
+      # Reached by cloudflared (route to the CouchDB sub-domain, behind Cloudflare Access).
+      - "${BIND_ADDRESS:-0.0.0.0}:${COUCHDB_PORT:-5984}:5984"
+    networks: [sync]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u \"$$COUCHDB_USER:$$COUCHDB_PASSWORD\" http://127.0.0.1:5984/_up >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  couchdb-init:
+    image: ${AISIDIAN_IMAGE_PREFIX:-ghcr.io/joblinours/aisidian}-couchdb-init:${AISIDIAN_TAG:-latest}
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_ADMIN_USER:?}
+      COUCHDB_ADMIN_PASSWORD: ${COUCHDB_ADMIN_PASSWORD:?}
+      COUCHDB_DATABASE: ${COUCHDB_DATABASE:-obsidian}
+      COUCHDB_SYNC_USER: ${COUCHDB_SYNC_USER:?}
+      COUCHDB_SYNC_PASSWORD: ${COUCHDB_SYNC_PASSWORD:?}
+    depends_on:
+      couchdb: { condition: service_healthy }
+    networks: [sync]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  # Headless LiveSync client: keeps the vault/ volume in sync with CouchDB (decrypts E2EE).
+  # Bootstrap once with a Setup URI, see docs/*/livesync.md.
+  livesync:
+    <<: *hardening
+    image: ghcr.io/vrtmrz/livesync-cli:${LIVESYNC_CLI_TAG:-latest}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      LIVESYNC_DB_PATH: /data
+      TZ: ${TZ:-Europe/Paris}
+    command: ["--vault", "/vault", "daemon"]
+    volumes:
+      - livesync-state:/data   # internal client state, never the vault
+      - vault:/vault
+    depends_on:
+      volumes-init: { condition: service_completed_successfully }
+      couchdb-init: { condition: service_completed_successfully }
+    networks: [sync]
+    cap_drop: [ALL]
+
+  # Fallback if livesync-cli fails phase 1: full Obsidian in a container (web UI on the LAN).
+  # Enable with: docker compose --profile fallback up -d  (and stop the livesync service).
+  obsidian-fallback:
+    <<: *hardening
+    profiles: [fallback]
+    image: lscr.io/linuxserver/obsidian:${OBSIDIAN_TAG:-latest}
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Paris}
+    volumes:
+      - obsidian-config:/config
+      - vault:/vault
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${OBSIDIAN_FALLBACK_PORT:-3000}:3000"
+    shm_size: "1gb"
+    networks: [sync]
+
+  mcp:
+    <<: *hardening
+    image: ${AISIDIAN_IMAGE_PREFIX:-ghcr.io/joblinours/aisidian}-mcp:${AISIDIAN_TAG:-latest}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?}
+      TZ: ${TZ:-Europe/Paris}
+      AGENT_MODE: ${AGENT_MODE:-simulation}
+      AGENT_MAX_WRITES: ${AGENT_MAX_WRITES:-50}
+      PERMISSIONS_FILE: ${PERMISSIONS_FILE:-}
+      ALLOWED_REDIRECT_URIS: ${ALLOWED_REDIRECT_URIS:-}
+      CIMD_ALLOWED_HOSTS: ${CIMD_ALLOWED_HOSTS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-AIsidian}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-aisidian@localhost}
+      BACKUP_STATUS_FILE: /backup-status/backup.json
+    volumes:
+      - vault:/vault
+      - mcp-state:/state
+      - backup-status:/backup-status:ro
+      - ${CONFIG_DIR:-./config}:/config:ro
+    ports:
+      # 8080: MCP + OAuth, routed by cloudflared. 9101: status for Zabbix, LAN only (never in the tunnel).
+      - "${BIND_ADDRESS:-0.0.0.0}:${MCP_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-0.0.0.0}:${MCP_STATUS_PORT:-9101}:9101"
+    depends_on:
+      volumes-init: { condition: service_completed_successfully }
+    networks: [mcp]   # isolated from CouchDB
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    cap_drop: [ALL]
+
+  backup:
+    <<: *hardening
+    image: ${AISIDIAN_IMAGE_PREFIX:-ghcr.io/joblinours/aisidian}-backup:${AISIDIAN_TAG:-latest}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment: &backup-env
+      TZ: ${TZ:-Europe/Paris}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?}
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_ADMIN_USER:?}
+      COUCHDB_ADMIN_PASSWORD: ${COUCHDB_ADMIN_PASSWORD:?}
+      COUCHDB_DATABASE: ${COUCHDB_DATABASE:-obsidian}
+      BACKUP_MINUTE: ${BACKUP_MINUTE:-5}
+    volumes:
+      - vault:/data/vault:ro
+      - mcp-state:/data/mcp-state:ro
+      - ${CONFIG_DIR:-./config}:/data/config:ro
+      - ${RESTIC_REPOSITORY_PATH:?}:/repo
+      - backup-cache:/cache
+      - backup-status:/status
+    depends_on:
+      volumes-init: { condition: service_completed_successfully }
+      couchdb: { condition: service_healthy }
+    networks: [sync]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+
+  # Restore job (read-write mounts). Run through scripts/restore-stack.sh.
+  restore:
+    profiles: [restore]
+    image: ${AISIDIAN_IMAGE_PREFIX:-ghcr.io/joblinours/aisidian}-backup:${AISIDIAN_TAG:-latest}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    entrypoint: ["/usr/local/bin/restore.sh"]
+    environment: *backup-env
+    volumes:
+      - vault:/data/vault
+      - mcp-state:/data/mcp-state
+      - ${CONFIG_DIR:-./config}:/data/config
+      - ${RESTIC_REPOSITORY_PATH:?}:/repo:ro
+      - backup-cache:/cache
+    networks: [sync]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: "no"
+
+networks:
+  sync: {}
+  mcp: {}
+
+volumes:
+  couchdb-data:
+  vault:
+  livesync-state:
+  mcp-state:
+  backup-status:
+  backup-cache:
+  obsidian-config:
