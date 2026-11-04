@@ -17,6 +17,44 @@ Interface web du vault, en tuiles façon Hyprland (palette Catppuccin Mocha) : �
 | Graphe | Global ou local (note courante et voisines), filtre, clic pour ouvrir ; notes isolées en anneau autour des notes liées |
 | Explorateur | Arborescence complète, recherche plein texte (insensible aux accents), import `.md` (bouton ou glisser-déposer) vers `00-Inbox` sans jamais écraser, export `.md` des notes cochées |
 
+## Raccourcis clavier
+
+Inspirés d'Obsidian. `Ctrl+P` affiche la palette avec toutes les commandes et leurs raccourcis (`⌘` au lieu de `Ctrl` sur Mac). Les navigateurs réservent `Ctrl+N`, `Ctrl+W`, `Ctrl+T`, `Ctrl+Tab` et `Ctrl+1…9` à leurs propres onglets : leurs équivalents passent par `Alt`.
+
+| Raccourci | Action |
+| --- | --- |
+| `Ctrl+P` | Palette de commandes |
+| `Ctrl+O` | Sélecteur rapide : trouver une note (recherche floue) ou la créer dans `00-Inbox` |
+| `Ctrl+E` | Basculer lecture / édition |
+| `Ctrl+S` | Enregistrer (l'enregistrement est aussi automatique) |
+| `Alt+N` | Nouvelle note |
+| `Alt+W` | Fermer l'onglet |
+| `Alt+1…8`, `Alt+9` | Aller à l'onglet N, au dernier |
+| `Alt+PgDn` / `Alt+PgUp` | Onglet suivant / précédent |
+| `Ctrl+Alt+←` / `Ctrl+Alt+→` | Naviguer en arrière / en avant |
+| `Ctrl+Shift+F` | Rechercher dans le vault |
+| `Ctrl+G` | Graphe (bascule l'espace 3) |
+| `Ctrl+Alt+1…3` | Espaces 1 à 3 |
+
+Dans l'éditeur :
+
+| Raccourci | Action |
+| --- | --- |
+| `Ctrl+B` / `Ctrl+I` | Gras / italique |
+| `Ctrl+K` | Lien Markdown |
+| `Ctrl+L` | Case à cocher : ajouter, cocher, décocher |
+| `Ctrl+/` | Commentaire `%% %%` |
+| `Tab` / `Shift+Tab`, `Ctrl+]` / `Ctrl+[` | Indenter / désindenter |
+| `Ctrl+D` | Supprimer la ligne (du texte, jamais une note) |
+| `Entrée` dans une liste | Continue la liste (puces, numéros, cases) ; sur un élément vide, la termine |
+| `[[` | Ferme les crochets et propose les notes (↑/↓, `Entrée` ou `Tab`, `Échap`) |
+| `Alt+Entrée` | Suivre le lien sous le curseur |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Annuler / rétablir (historique natif conservé pour toutes les commandes) |
+
+## Rendu Markdown
+
+Titres, listes imbriquées et numérotées, cases à cocher, citations, callouts Obsidian (`> [!note]`, `[!tip]`, `[!warning]`…), blocs de code (aussi indentés dans une liste, avec ```` ``` ```` ou `~~~`), tableaux avec alignement des colonnes, code inline, gras, liens `[[…]]` (cliquables, pointillés si la note n'existe pas), liens web et tags.
+
 **Conflits** : si une note a changé ailleurs (appareil LiveSync, Claude, agent) depuis son ouverture, l'enregistrement est refusé et un bandeau propose *Recharger la version du vault* ou *Écraser avec ma version*. Hors édition, la note ouverte et l'arborescence se rafraîchissent toutes les 20 s.
 
 ## Sécurité

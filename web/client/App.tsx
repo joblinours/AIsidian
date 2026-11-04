@@ -3,6 +3,12 @@ import { api, HttpError, setUnauthorizedHandler, type Graph, type Note, type Sea
 import { layout } from './graph';
 import { IChevron, IClose, IDownload, IEdit, IEye, IFile, IFolder, IGraph, IPlus, ISave, ISearch, IUpload } from './icons';
 import { Markdown, wordCount } from './markdown';
+import { autoPairBrackets, completeWikilink, deleteLines, fuzzy, indent, insertLink, linkUnderCursor, smartEnter, toggleCheckbox, toggleWrap, wikilinkAtCursor } from './editing';
+import { Palette, type PaletteItem } from './Palette';
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = isMac ? '⌘' : 'Ctrl';
+const ALT = isMac ? '⌥' : 'Alt';
 
 type Panel = 'editor' | 'graph' | 'explorer';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
@@ -63,6 +69,12 @@ export function App({ onLogout }: { onLogout: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [creating, setCreating] = useState(false);
   const [now, setNow] = useState(clock());
+  const [palette, setPalette] = useState<null | 'commands' | 'switcher'>(null);
+  const [suggest, setSuggest] = useState<{ query: string; start: number; end: number; index: number } | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const history = useRef<{ stack: string[]; pos: number }>({ stack: [], pos: -1 });
+  const resolveRef = useRef<(t: string) => string | null>(() => null);
   const toastTimer = useRef<number>();
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
@@ -88,7 +100,14 @@ export function App({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   const open = useCallback(
-    async (path: string) => {
+    async (path: string, fromHistory = false) => {
+      if (!fromHistory) {
+        const h = history.current;
+        if (h.stack[h.pos] !== path) {
+          h.stack = [...h.stack.slice(0, h.pos + 1), path].slice(-100);
+          h.pos = h.stack.length - 1;
+        }
+      }
       setTabs((t) => (t.includes(path) ? t : [...t, path]));
       setCurrent(path);
       setActive('editor');
@@ -179,6 +198,159 @@ export function App({ onLogout }: { onLogout: () => void }) {
     });
   };
 
+  const navigate = (delta: number) => {
+    const h = history.current;
+    const pos = h.pos + delta;
+    const target = h.stack[pos];
+    if (target === undefined) return;
+    h.pos = pos;
+    open(target, true);
+  };
+
+  const cycleTab = (delta: number) => {
+    if (!tabs.length) return;
+    const i = current ? tabs.indexOf(current) : -1;
+    const next = tabs[(i + delta + tabs.length) % tabs.length];
+    if (next) open(next);
+  };
+
+  const gotoTab = (n: number) => {
+    const target = n === 9 ? tabs[tabs.length - 1] : tabs[n - 1];
+    if (target) open(target);
+  };
+
+  const toggleMode = () => {
+    setMode((m) => (m === 'read' ? 'edit' : 'read'));
+    setActive('editor');
+    if (workspace === 3) setWorkspace(1);
+  };
+
+  const focusSearch = () => {
+    if (workspace === 2) setWorkspace(1);
+    setActive('explorer');
+    setTimeout(() => searchRef.current?.focus(), 0);
+  };
+
+  const createNamed = async (title: string) => {
+    try {
+      const n = await api.create(title, '00-Inbox');
+      setNotes((st) => ({ ...st, [n.path]: n }));
+      await refreshLists();
+      setMode('edit');
+      open(n.path);
+    } catch (e) {
+      flash((e as Error).message, true);
+    }
+  };
+
+  const commands: (PaletteItem & { keys?: (e: KeyboardEvent) => boolean })[] = [
+    { id: 'switcher', label: 'Ouvrir une note (sélecteur rapide)', hint: `${MOD}+O`, run: () => setPalette('switcher') },
+    { id: 'new', label: 'Nouvelle note', hint: `${ALT}+N`, run: () => setCreating(true) },
+    { id: 'mode', label: 'Basculer lecture / édition', hint: `${MOD}+E`, run: toggleMode },
+    { id: 'save', label: 'Enregistrer la note', hint: `${MOD}+S`, run: () => current && save(current) },
+    { id: 'close', label: 'Fermer l’onglet', hint: `${ALT}+W`, run: () => current && close(current) },
+    { id: 'next', label: 'Onglet suivant', hint: `${ALT}+PgDn`, run: () => cycleTab(1) },
+    { id: 'prev', label: 'Onglet précédent', hint: `${ALT}+PgUp`, run: () => cycleTab(-1) },
+    { id: 'back', label: 'Naviguer en arrière', hint: `${MOD}+${ALT}+←`, run: () => navigate(-1) },
+    { id: 'fwd', label: 'Naviguer en avant', hint: `${MOD}+${ALT}+→`, run: () => navigate(1) },
+    { id: 'search', label: 'Rechercher dans le vault', hint: `${MOD}+Shift+F`, run: focusSearch },
+    { id: 'graph', label: 'Afficher le graphe', hint: `${MOD}+G`, run: () => { setWorkspace((w) => (w === 3 ? 1 : 3)); setActive('graph'); } },
+    { id: 'local', label: 'Graphe : basculer global / local', run: () => setScope((sc) => (sc === 'global' ? 'local' : 'global')) },
+    { id: 'ws1', label: 'Espace 1 : tuiles', hint: `${MOD}+${ALT}+1`, run: () => setWorkspace(1) },
+    { id: 'ws2', label: 'Espace 2 : éditeur seul', hint: `${MOD}+${ALT}+2`, run: () => setWorkspace(2) },
+    { id: 'ws3', label: 'Espace 3 : graphe et explorateur', hint: `${MOD}+${ALT}+3`, run: () => setWorkspace(3) },
+    { id: 'tabn', label: 'Aller à l’onglet 1 à 8 (9 = dernier)', hint: `${ALT}+1…9`, run: () => gotoTab(1) },
+    { id: 'bold', label: 'Éditeur : gras', hint: `${MOD}+B`, run: () => taRef.current && toggleWrap(taRef.current, '**') },
+    { id: 'italic', label: 'Éditeur : italique', hint: `${MOD}+I`, run: () => taRef.current && toggleWrap(taRef.current, '*') },
+    { id: 'link', label: 'Éditeur : insérer un lien Markdown', hint: `${MOD}+K`, run: () => taRef.current && insertLink(taRef.current) },
+    { id: 'check', label: 'Éditeur : cocher / décocher la case', hint: `${MOD}+L`, run: () => taRef.current && toggleCheckbox(taRef.current) },
+    { id: 'comment', label: 'Éditeur : commentaire %% %%', hint: `${MOD}+/`, run: () => taRef.current && toggleWrap(taRef.current, '%%') },
+    { id: 'indent', label: 'Éditeur : indenter / désindenter', hint: `Tab · Shift+Tab · ${MOD}+] / [`, run: () => taRef.current && indent(taRef.current, false) },
+    { id: 'delline', label: 'Éditeur : supprimer la ligne', hint: `${MOD}+D`, run: () => taRef.current && deleteLines(taRef.current) },
+    { id: 'follow', label: 'Éditeur : suivre le lien sous le curseur', hint: `${ALT}+Entrée`, run: () => followLink() },
+    { id: 'palette', label: 'Palette de commandes', hint: `${MOD}+P`, run: () => setPalette('commands') },
+    { id: 'logout', label: 'Se déconnecter', run: onLogout },
+  ];
+
+  function followLink() {
+    const ta = taRef.current;
+    if (!ta) return;
+    const target = linkUnderCursor(ta);
+    if (!target) return;
+    const p = resolveRef.current(target);
+    if (p) open(p);
+    else flash(`Note inexistante : ${target}`, true);
+  }
+
+  // Global shortcuts (Obsidian-like). Browsers reserve Ctrl+N/W/T/Tab/1-9 for
+  // their own tabs, hence the Alt equivalents.
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keyRef.current = (e: KeyboardEvent) => {
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    const stop = (fn: () => void) => { e.preventDefault(); e.stopPropagation(); fn(); };
+    if (palette || creating) return;
+    if (mod && !e.altKey && !e.shiftKey && k === 'p') return stop(() => setPalette('commands'));
+    if (mod && !e.altKey && !e.shiftKey && k === 'o') return stop(() => setPalette('switcher'));
+    if (mod && !e.altKey && !e.shiftKey && k === 'e') return stop(toggleMode);
+    if (mod && !e.altKey && !e.shiftKey && k === 's') return stop(() => current && save(current));
+    if (mod && e.shiftKey && k === 'f') return stop(focusSearch);
+    if (mod && !e.altKey && !e.shiftKey && k === 'g') return stop(() => { setWorkspace((w) => (w === 3 ? 1 : 3)); setActive('graph'); });
+    if (((mod && !e.altKey) || (e.altKey && !mod)) && !e.shiftKey && k === 'n') return stop(() => setCreating(true));
+    if (((mod && !e.altKey) || (e.altKey && !mod)) && !e.shiftKey && k === 'w') return stop(() => current && close(current));
+    if (mod && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return stop(() => navigate(e.key === 'ArrowLeft' ? -1 : 1));
+    if (mod && e.altKey && /^[1-3]$/.test(e.key)) return stop(() => setWorkspace(Number(e.key) as 1 | 2 | 3));
+    if (e.altKey && !mod && /^Digit[1-9]$/.test(e.code)) return stop(() => gotoTab(Number(e.code.slice(5))));
+    if ((e.altKey || mod) && (e.key === 'PageDown' || e.key === 'PageUp')) return stop(() => cycleTab(e.key === 'PageDown' ? 1 : -1));
+    if (mod && e.key === 'Tab') return stop(() => cycleTab(e.shiftKey ? -1 : 1));
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
+  }, []);
+
+  // Editor-only shortcuts; returns after handling so that native keys keep working.
+  const onEditorKey = (e: KeyboardEvent) => {
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    const mod = e.ctrlKey || e.metaKey;
+    // wikilink suggestions take the arrows / Enter / Tab / Escape first
+    if (suggest && suggestions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const d = e.key === 'ArrowDown' ? 1 : -1;
+        setSuggest({ ...suggest, index: (suggest.index + d + suggestions.length) % suggestions.length });
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const pick = suggestions[suggest.index];
+        if (pick) completeWikilink(ta, suggest, pick.title);
+        setSuggest(null);
+        return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); setSuggest(null); return; }
+    }
+    const k = e.key.toLowerCase();
+    const run = (fn: () => void) => { e.preventDefault(); fn(); };
+    if (mod && !e.shiftKey && k === 'b') return run(() => toggleWrap(ta, '**'));
+    if (mod && !e.shiftKey && k === 'i') return run(() => toggleWrap(ta, '*'));
+    if (mod && !e.shiftKey && k === 'k') return run(() => insertLink(ta));
+    if (mod && !e.shiftKey && k === 'l') return run(() => toggleCheckbox(ta));
+    if (mod && !e.shiftKey && k === 'd') return run(() => deleteLines(ta));
+    if (mod && e.key === '/') return run(() => toggleWrap(ta, '%%'));
+    if (mod && (e.key === ']' || e.key === '[')) return run(() => indent(ta, e.key === '['));
+    if (e.key === 'Tab' && !mod && !e.altKey) return run(() => indent(ta, e.shiftKey));
+    if (e.key === 'Enter' && e.altKey && !mod) return run(followLink);
+    if (e.key === 'Enter' && !mod && !e.altKey && !e.shiftKey && smartEnter(ta)) return void e.preventDefault();
+    if (e.key === '[' && !mod && !e.altKey && autoPairBrackets(ta)) return void e.preventDefault();
+  };
+
+  const updateSuggest = (ta: HTMLTextAreaElement) => {
+    const link = wikilinkAtCursor(ta);
+    setSuggest((prev) => (link ? { ...link, index: prev && prev.start === link.start ? Math.min(prev.index, 50) : 0 } : null));
+  };
+
   // ---------------------------------------------------------------- search
   useEffect(() => {
     const q = filter.trim();
@@ -230,7 +402,7 @@ export function App({ onLogout }: { onLogout: () => void }) {
     }
     return m;
   }, [tree]);
-  const resolve = useCallback(
+  const resolve: (t: string) => string | null = useCallback(
     (target: string) => {
       const t = target.replace(/\.md$/i, '').toLowerCase();
       if (t.includes('/')) return tree.notes.find((n) => n.path.toLowerCase().replace(/\.md$/, '').endsWith(t))?.path ?? null;
@@ -268,6 +440,14 @@ export function App({ onLogout }: { onLogout: () => void }) {
     [localKey, graph.edges],
   );
   const positions = scope === 'local' ? localPositions : globalPositions;
+  resolveRef.current = resolve;
+  const suggestions = suggest
+    ? tree.notes
+        .map((n) => ({ ...n, score: fuzzy(suggest.query, n.title) }))
+        .filter((n) => n.score >= 0 && !/\{\{/.test(n.title))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+    : [];
   const gq = gfilter.trim().toLowerCase();
   let edgesD = '';
   let activeD = '';
@@ -339,6 +519,7 @@ export function App({ onLogout }: { onLogout: () => void }) {
           <span class="wide"><span class="dot" aria-hidden="true" /> vault</span>
           <span>{tree.notes.length} notes</span>
           <span class="wide" style={{ color: 'var(--text)' }}>{now}</span>
+          <button type="button" class="bar-btn hv" onClick={() => setPalette('commands')} title={`Palette de commandes et raccourcis (${MOD}+P)`}>{MOD}+P</button>
           <button type="button" class="bar-btn hv" onClick={onLogout}>déconnexion</button>
         </div>
       </header>
@@ -366,8 +547,8 @@ export function App({ onLogout }: { onLogout: () => void }) {
                   <button type="button" class="tbtn hv" onClick={() => current && save(current)} disabled={drafts[cur.path] === undefined || status === 'saving'} title="Enregistrer (Ctrl+S)"><ISave />Enregistrer</button>
                 )}
                 <div class="seg" role="group" aria-label="Mode">
-                  <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}><IEdit />Édition</button>
-                  <button type="button" aria-pressed={mode === 'read'} onClick={() => setMode('read')}><IEye />Lecture</button>
+                  <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} title={`Édition (${MOD}+E)`}><IEdit />Édition</button>
+                  <button type="button" aria-pressed={mode === 'read'} onClick={() => setMode('read')} title={`Lecture (${MOD}+E)`}><IEye />Lecture</button>
                 </div>
               </div>
 
@@ -405,9 +586,10 @@ export function App({ onLogout }: { onLogout: () => void }) {
               )}
 
               {cur && mode === 'edit' && (
-                <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
                   <label for="md-editor" class="sr">Contenu Markdown de la note</label>
                   <textarea
+                    ref={taRef}
                     id="md-editor"
                     class="editor scroll"
                     value={text}
@@ -418,14 +600,23 @@ export function App({ onLogout }: { onLogout: () => void }) {
                       const p = cur.path;
                       setDrafts((d) => ({ ...d, [p]: v }));
                       setSaveState((s) => (s[p] === 'conflict' ? s : { ...s, [p]: 'dirty' }));
+                      updateSuggest(e.target as HTMLTextAreaElement);
                     }}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                        e.preventDefault();
-                        save(cur.path);
-                      }
-                    }}
+                    onKeyDown={onEditorKey}
+                    onClick={(e) => updateSuggest(e.target as HTMLTextAreaElement)}
+                    onBlur={() => setTimeout(() => setSuggest(null), 150)}
                   />
+                  {suggest && suggestions.length > 0 && (
+                    <ul class="suggest" role="listbox" aria-label="Notes à lier">
+                      {suggestions.map((n, i) => (
+                        <li key={n.path} role="option" aria-selected={i === suggest.index}>
+                          <button type="button" class={i === suggest.index ? 'on' : ''} onMouseDown={(e) => { e.preventDefault(); if (taRef.current) completeWikilink(taRef.current, suggest, n.title); setSuggest(null); }}>
+                            <span>{n.title}</span><span class="ph">{n.folder}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -512,7 +703,7 @@ export function App({ onLogout }: { onLogout: () => void }) {
                   <label class="field" style={{ height: '30px' }}>
                     <ISearch />
                     <span class="sr">Rechercher dans le vault</span>
-                    <input type="text" value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} placeholder="rechercher une note…" />
+                    <input ref={searchRef} type="text" value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} placeholder="rechercher une note…" />
                   </label>
                 </div>
                 <div class="rows scroll">
@@ -557,6 +748,17 @@ export function App({ onLogout }: { onLogout: () => void }) {
         )}
       </main>
 
+      {palette === 'commands' && (
+        <Palette placeholder="Taper une commande…" items={commands} onClose={() => setPalette(null)} />
+      )}
+      {palette === 'switcher' && (
+        <Palette
+          placeholder="Trouver ou créer une note…"
+          items={tree.notes.filter((n) => !/\{\{/.test(n.title)).map((n) => ({ id: n.path, label: n.title, hint: n.folder, run: () => open(n.path) }))}
+          onClose={() => setPalette(null)}
+          extra={(q) => (tree.notes.some((n) => n.title.toLowerCase() === q.toLowerCase()) ? null : { id: '__create', label: `Créer « ${q} »`, hint: '00-Inbox', run: () => createNamed(q) })}
+        />
+      )}
       {creating && (
         <NewNoteDialog
           folders={tree.folders}
@@ -577,11 +779,13 @@ export function App({ onLogout }: { onLogout: () => void }) {
 
 function NewNoteDialog({ folders, onCancel, onCreate }: { folders: string[]; onCancel: () => void; onCreate: (title: string, folder: string) => Promise<void> }) {
   const [title, setTitle] = useState('');
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => titleRef.current?.focus(), []);
   const [folder, setFolder] = useState(folders.includes('00-Inbox') ? '00-Inbox' : folders[0] ?? '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   return (
-    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="nn-title">
+    <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="nn-title" onKeyDown={(e) => e.key === 'Escape' && onCancel()}>
       <div class="card">
         <form
           onSubmit={async (e) => {
@@ -597,7 +801,7 @@ function NewNoteDialog({ folders, onCancel, onCreate }: { folders: string[]; onC
           }}
         >
           <h1 id="nn-title">Nouvelle note</h1>
-          <label>Titre<input autoFocus required value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} placeholder="Docker Compose - réseaux" /></label>
+          <label>Titre<input ref={titleRef} required value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} placeholder="Docker Compose - réseaux" /></label>
           <label>Dossier
             <select value={folder} onChange={(e) => setFolder((e.target as HTMLSelectElement).value)}>
               <option value="">(racine du vault)</option>
