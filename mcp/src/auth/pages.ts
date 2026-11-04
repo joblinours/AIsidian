@@ -1,3 +1,14 @@
+/**
+ * CSP of the login page. Browsers apply `form-action` to the redirect that
+ * follows the form submission too, so the client's redirect origin (claude.ai
+ * callback, Claude Code loopback port) must be allowed, or the redirect is
+ * silently blocked after a successful login.
+ */
+export function loginCsp(redirectUri: string): string {
+  const origin = new URL(redirectUri).origin;
+  return `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${origin}; frame-ancestors 'none'`;
+}
+
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

@@ -14,7 +14,7 @@ import type { Config } from '../config.js';
 import { endpoints } from '../config.js';
 import { JsonStore } from '../state/store.js';
 import { randomToken, sha256, log } from '../util.js';
-import { loginPage } from './pages.js';
+import { loginCsp, loginPage } from './pages.js';
 
 interface Grant {
   clientId: string;
@@ -178,7 +178,7 @@ export class AisidianOAuthProvider implements OAuthServerProvider {
     this.gc();
     const requestId = randomToken(24);
     this.pending.set(requestId, { client, params, resource, expiresAt: Date.now() + PENDING_TTL_MS });
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', loginCsp(params.redirectUri));
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.type('html').send(

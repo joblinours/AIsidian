@@ -33,9 +33,12 @@ async function authorize(app: ReturnType<typeof createApp>, totp: OTPAuth.TOTP, 
   if (resource) q.set('resource', resource);
   const page = await request(app).get(`/authorize?${q}`);
   expect(page.status).toBe(200);
+  // Browsers apply form-action to the post-login redirect: the client's origin must be allowed.
+  expect(page.headers['content-security-policy']).toContain(`form-action 'self' ${new URL(redirect).origin}`);
   const requestId = /name="request_id" value="([^"]+)"/.exec(page.text)![1]!;
   const bad = await request(app).post('/oauth/login').type('form').send({ request_id: requestId, password: 'wrong password!', totp: totp.generate() });
   expect(bad.status).toBe(401);
+  expect(bad.headers['content-security-policy']).toContain(new URL(redirect).origin);
   const login = await request(app).post('/oauth/login').type('form').send({ request_id: requestId, password: 'correct horse battery', totp: totp.generate() });
   expect(login.status).toBe(302);
   const loc = new URL(login.headers.location!);

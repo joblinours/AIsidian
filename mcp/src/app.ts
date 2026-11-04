@@ -6,7 +6,7 @@ import { mcpAuthRouter, createOAuthMetadata, getOAuthProtectedResourceMetadataUr
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Account, LockedError, MIN_PASSWORD_LENGTH } from './auth/account.js';
-import { messagePage, loginPage, setupPage } from './auth/pages.js';
+import { loginCsp, messagePage, loginPage, setupPage } from './auth/pages.js';
 import { AisidianOAuthProvider } from './auth/provider.js';
 import { endpoints, type Config } from './config.js';
 import type { Endpoint, Ops } from './ops.js';
@@ -85,6 +85,8 @@ export function createApp({ cfg, ops, account, provider }: AppDeps): express.Exp
       res.status(400).type('html').send(messagePage('Demande expirée', 'Relance la connexion depuis Claude.'));
       return;
     }
+    // Same CSP as the authorize page: the next submission must be allowed to redirect to the client.
+    res.setHeader('Content-Security-Policy', loginCsp(pending.params.redirectUri));
     const again = (error: string) =>
       res.status(401).type('html').send(
         loginPage({ requestId: request_id!, clientName: pending.client.client_name ?? pending.client.client_id, redirectHost: new URL(pending.params.redirectUri).host, error }),
