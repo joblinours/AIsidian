@@ -46,6 +46,33 @@ docker compose logs -f livesync
 
 `.livesync/ignore` (installé par le template) exclut `.git/` de la synchronisation : l'historique git du serveur ne quitte jamais le serveur.
 
+### Variante : le serveur initialise la base
+
+Si le vault de référence est celui du serveur (vault neuf avec `scripts/install-vault-template.sh`), le serveur crée la base avec `rebuild`. **`rebuild` supprime et recrée la base : il faut le compte admin CouchDB**, l'utilisateur LiveSync n'étant administrateur que de sa base. Ensuite, `couchdb-init` remet les droits de l'utilisateur LiveSync sur la base recréée.
+
+```bash
+docker compose stop livesync
+docker compose run --rm livesync init-settings /data/.livesync/settings.json
+# Réglages : URI http://couchdb:5984, compte ADMIN pour le rebuild, base, E2EE, obfuscation
+docker compose run --rm -e U="$COUCHDB_ADMIN_USER" -e P="$COUCHDB_ADMIN_PASSWORD" -e D="$COUCHDB_DATABASE" -e K="$E2EE_PASSPHRASE" \
+  --entrypoint node livesync -e '
+const f="/data/.livesync/settings.json",fs=require("fs"),s=JSON.parse(fs.readFileSync(f)),e=process.env;
+Object.assign(s,{couchDB_URI:"http://couchdb:5984",couchDB_USER:e.U,couchDB_PASSWORD:e.P,couchDB_DBNAME:e.D,
+encrypt:true,passphrase:e.K,usePathObfuscation:true,liveSync:true,isConfigured:true});fs.writeFileSync(f,JSON.stringify(s,null,2));'
+scripts/install-vault-template.sh
+docker compose run --rm livesync --vault /vault rebuild --force
+docker compose run --rm couchdb-init
+# Retour sur l'utilisateur LiveSync dédié
+docker compose run --rm -e U="$COUCHDB_SYNC_USER" -e P="$COUCHDB_SYNC_PASSWORD" --entrypoint node livesync -e '
+const f="/data/.livesync/settings.json",fs=require("fs"),s=JSON.parse(fs.readFileSync(f));
+Object.assign(s,{couchDB_USER:process.env.U,couchDB_PASSWORD:process.env.P});fs.writeFileSync(f,JSON.stringify(s,null,2));'
+docker compose up -d livesync
+```
+
+Les appareils se branchent ensuite avec la même passphrase et l'obfuscation activée, et choisissent de **récupérer depuis le serveur** (fetch).
+
+Si un `rebuild` est interrompu, le client refuse de démarrer (`Reconstruction recovery is required`) : relance le même `rebuild --force`.
+
 ## 3. Autres appareils
 
 Windows, iPhone, WSL : vault vide + plugin + *Use setup URI*. Sur iOS, vérifier que les en-têtes Access sont bien envoyés (phase 1).

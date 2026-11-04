@@ -30,6 +30,10 @@ docker compose up -d livesync
 
 Check `settings.json`: `encrypt: true`, `usePathObfuscation: true`, passphrase present (required by the server to write plain files into `vault/`; accepted risk). `.livesync/ignore` excludes `.git/`.
 
+### Variant: the server initialises the database
+
+When the reference vault is the server's (fresh vault from `scripts/install-vault-template.sh`), the server creates the database with `rebuild`. **`rebuild` deletes and recreates the database, so it needs the CouchDB admin account** (the LiveSync user is only admin of its database). Run `couchdb-init` afterwards to give the LiveSync user its rights on the recreated database, then switch the settings back to the LiveSync user (see the French version for the exact commands). Devices then connect with the same passphrase and path obfuscation and choose to **fetch from the server**. If a `rebuild` is interrupted, the client refuses to start (`Reconstruction recovery is required`): run the same `rebuild --force` again.
+
 ## 3. Other devices
 
 Empty vault + plugin + *Use setup URI*. On iOS, check that Access headers are sent (phase 1).
