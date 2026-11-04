@@ -55,4 +55,6 @@ Le serveur applique déjà une partie de ces règles (refus techniques), mais tu
 
 ## Index
 
-- Une note d'index par domaine et pour `30-Connaissances/` peut être créée (`type: index`) dans le dossier concerné, listant les notes en `[[…]]`. Mets-la à jour avec `append_to_note`.
+- Chaque dossier contient une note d'index (`Index Inbox`, `Index Connaissances`, `Index Homelab`…, `type: index`). Elles maintiennent l'arborescence visible sur tous les appareils : ne les déplace jamais (le serveur le refuse), ne les propose jamais à l'archivage.
+- Quand tu ranges une note, ajoute un lien `[[…]]` vers elle dans la section « Notes » de l'index de son dossier (`append_to_note` avec `heading: "Notes"`), s'il est accessible en écriture.
+- Ne range pas les notes d'index de `00-Inbox/` : elles y restent.

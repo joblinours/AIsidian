@@ -368,7 +368,10 @@ export class Ops {
       if (ctx.endpoint === 'agent' && folder.toLowerCase().startsWith('90-archives')) {
         throw new ToolError('Archivage interdit à l\'agent : utilise propose_action (kind=archive).');
       }
-      await this.load(rel, ctx, a.expected_version);
+      const n = await this.load(rel, ctx, a.expected_version);
+      if (ctx.endpoint === 'agent' && n.frontmatter.type === 'index') {
+        throw new ToolError('Les notes d\'index restent dans leur dossier : ne les déplace pas.');
+      }
       if (await this.vault.exists(dest)) throw new ToolError(`« ${dest} » existe déjà.`);
       return {
         paths: [rel, dest],

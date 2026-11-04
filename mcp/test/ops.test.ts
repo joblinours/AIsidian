@@ -126,6 +126,9 @@ describe('agent endpoint', () => {
     await expect(s.ops.setFrontmatter(agent, { path: '00-Inbox/A.md', fields: { status: 'archived' }, expected_version: va })).rejects.toThrow(ToolError);
     await expect(s.ops.addTags(agent, { path: '00-Inbox/A.md', tags: ['x'] })).rejects.toThrow(/expected_version/);
     await expect(s.ops.moveNote(agent, { path: '30-Connaissances/B.md', folder: '10-Projets', expected_version: vb })).rejects.toThrow(/ne déplace que/);
+    await seed(s.vaultDir, '00-Inbox/Index Inbox.md', '---\ntype: index\n---\n# Index Inbox\n');
+    const vi = (await s.vault.get('00-Inbox/Index Inbox.md')).version;
+    await expect(s.ops.moveNote(agent, { path: '00-Inbox/Index Inbox.md', folder: '30-Connaissances', expected_version: vi })).rejects.toThrow(/index/);
     await s.ops.setFrontmatter(agent, { path: '00-Inbox/A.md', fields: { status: 'unverified' }, expected_version: va });
     await expect(s.ops.addTags(agent, { path: '30-Connaissances/B.md', tags: ['y'], expected_version: vb })).rejects.toThrow(/Limite de 1/);
     await s.ops.writeReport(agent, { content: 'ok' });

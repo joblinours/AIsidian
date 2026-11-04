@@ -22,6 +22,8 @@ status: validated
 
 ## Règles
 
+- Chaque dossier contient une note d'index (`Index Inbox`, `Index Homelab`…) : elle garde l'arborescence visible sur tous les appareils (LiveSync ne synchronise pas les dossiers vides) et liste les notes du dossier.
+
 - Toutes les notes sont en français ; **une note par concept**.
 - Noms de fichiers : titre lisible, sans date (`Docker Compose - réseaux.md`). Dates `AAAA-MM-JJ` en préfixe uniquement dans `40-Journal/`.
 - Tags : à plat, minuscules, mots séparés par des tirets (`reverse-proxy`).
