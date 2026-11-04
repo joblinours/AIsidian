@@ -10,6 +10,7 @@ Tout le trafic externe passe par le Cloudflare Tunnel existant : aucun port ouve
 | --- | --- | --- |
 | `notes.example.com` | `http://<IP de l'hôte Docker>:8080` | MCP + OAuth. **Pas** d'application Access (une page de login interactive bloquerait Claude) |
 | `couch.example.com` | `http://<IP de l'hôte Docker>:5984` | CouchDB, derrière Access |
+| `vault.example.com` | `http://<IP de l'hôte Docker>:8090` | Interface web, protégée par son login mot de passe + TOTP ([web.md](web.md)). Une application Access (e-mail + code) peut s'y ajouter plus tard sans changement de code |
 
 Le port `9101` (statut pour Zabbix) ne doit **jamais** être routé dans le tunnel.
 

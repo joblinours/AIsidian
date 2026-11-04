@@ -24,6 +24,7 @@ A self-hosted Obsidian second brain that Claude writes to. Claude (Claude.ai web
 | Directory | Content |
 | --- | --- |
 | [`mcp/`](mcp) | MCP server (TypeScript, official SDK) with built-in single-user OAuth 2.1 (password + TOTP), per-folder permissions, git commit per write, no delete tool |
+| [`web/`](web) | Web UI (tiling editor, graph, explorer), same account as the MCP server, no delete |
 | [`couchdb-init/`](couchdb-init) | One-shot CouchDB setup for LiveSync |
 | [`backup/`](backup) | Restic image: hourly backups, retention, restore |
 | [`agent/`](agent) | Nightly agent prompt, rules and report template |

@@ -24,6 +24,7 @@ Un second cerveau Obsidian auto-hébergé, alimenté par Claude. Claude (Claude.
 | Dossier | Contenu |
 | --- | --- |
 | [`mcp/`](mcp) | Serveur MCP (TypeScript, SDK officiel) avec OAuth 2.1 mono-utilisateur intégré (mot de passe + TOTP), permissions par dossier, commit git par écriture, aucun outil de suppression |
+| [`web/`](web) | Interface web (éditeur en tuiles, graphe, explorateur), même compte que le MCP, sans suppression |
 | [`couchdb-init/`](couchdb-init) | Initialisation de CouchDB pour LiveSync |
 | [`backup/`](backup) | Image Restic : sauvegarde horaire, rétention, restauration |
 | [`agent/`](agent) | Prompt, règles et modèle de rapport de l'agent nocturne |

@@ -56,6 +56,7 @@ log "couchdb dumped (${docs} docs), vault ${vault_bytes} bytes"
 # 3. Snapshot
 paths="${DATA_DIR}/vault ${WORK_DIR}/couchdb"
 [ -d "${DATA_DIR}/mcp-state" ] && paths="$paths ${DATA_DIR}/mcp-state"
+[ -d "${DATA_DIR}/web-state" ] && paths="$paths ${DATA_DIR}/web-state"
 [ -d "${DATA_DIR}/config" ] && paths="$paths ${DATA_DIR}/config"
 # shellcheck disable=SC2086
 out=$(restic backup --host "$RESTIC_HOST" --tag aisidian --json --quiet $paths) || fail "restic backup failed"

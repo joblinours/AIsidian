@@ -16,8 +16,8 @@ printf '\nRestore snapshot "%s"? This overwrites current data. Type "yes": ' "$s
 read -r answer
 [ "$answer" = "yes" ] || { echo "aborted"; exit 1; }
 
-say "Stopping writers (livesync, mcp, backup)"
-$COMPOSE stop livesync mcp backup
+say "Stopping writers (livesync, mcp, web, backup)"
+$COMPOSE stop livesync mcp web backup
 
 say "Making sure CouchDB is up"
 $COMPOSE up -d couchdb

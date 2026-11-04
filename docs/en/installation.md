@@ -73,7 +73,11 @@ See [mcp.md](mcp.md).
 
 See [`agent/README.md`](../../agent/README.md): three nights in simulation, then `AGENT_MODE=real`.
 
-## 10. Monitoring
+## 10. Web UI
+
+Set `WEB_PUBLIC_URL`, add the tunnel route ([cloudflare.md](cloudflare.md)) and open the URL: same password and TOTP as the connector. See [web.md](web.md).
+
+## 11. Monitoring
 
 See [monitoring.md](monitoring.md).
 

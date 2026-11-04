@@ -5,12 +5,7 @@ import { JsonStore } from '../state/store.js';
 import { randomToken } from '../util.js';
 
 interface AccountDoc {
-  account: null | {
-    passwordHash: string;
-    totpSecret: string;
-    createdAt: string;
-    lastTotpCounter: number;
-  };
+  account: null | StoredAccount;
   failures: { count: number; lockedUntil: number };
 }
 
@@ -23,6 +18,28 @@ function totpFor(secret: string): OTPAuth.TOTP {
 }
 
 export class LockedError extends Error {}
+
+/** Time step of a valid TOTP code (±1 step), or null. */
+export function totpCounter(secret: string, code: string): number | null {
+  const clean = code.replace(/\s/g, '');
+  if (!/^\d{6}$/.test(clean)) return null;
+  const delta = totpFor(secret).validate({ token: clean, window: 1 });
+  if (delta === null) return null;
+  return Math.floor(Date.now() / 1000 / 30) + delta;
+}
+
+/** Account document stored by the MCP server in its state volume (account.json). */
+export interface StoredAccount {
+  passwordHash: string;
+  totpSecret: string;
+  createdAt: string;
+  lastTotpCounter: number;
+}
+
+/** Verifies a password against an argon2 hash, never throwing. */
+export async function verifyPassword(hashValue: string, password: string): Promise<boolean> {
+  return verify(hashValue, password).catch(() => false);
+}
 
 /**
  * The single user account: argon2id password + TOTP.
@@ -84,11 +101,7 @@ export class Account {
   }
 
   private totpCounter(secret: string, code: string): number | null {
-    const clean = code.replace(/\s/g, '');
-    if (!/^\d{6}$/.test(clean)) return null;
-    const delta = totpFor(secret).validate({ token: clean, window: 1 });
-    if (delta === null) return null;
-    return Math.floor(Date.now() / 1000 / 30) + delta;
+    return totpCounter(secret, code);
   }
 
   /** Verifies password + TOTP, with global lockout and TOTP replay protection. */

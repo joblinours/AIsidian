@@ -6,6 +6,7 @@ The MCP server exposes a JSON status on port `9101`, **LAN only** (`/status`, `/
 | --- | --- | --- | --- |
 | MCP up | HTTP agent | `http://<host>:9101/healthz` | non-200 for 5 min |
 | MCP public | Web scenario | `https://notes.example.com/healthz` | 3 failures |
+| Web UI | Web scenario | `https://vault.example.com/healthz` | 3 failures |
 | CouchDB up | HTTP agent | `http://<host>:5984/_up` (admin auth) | non-200 |
 | Containers | Zabbix agent 2 Docker plugin | `couchdb`, `livesync`, `mcp`, `backup` running (+ Docker healthchecks) | not running |
 | AIsidian status | HTTP agent (master item) | `http://<host>:9101/status` | — |

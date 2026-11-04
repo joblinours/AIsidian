@@ -25,7 +25,26 @@ export class Git {
     private author: { name: string; email: string },
   ) {}
 
+  /**
+   * Runs git. Two containers (mcp, web) write to the same repository: when the
+   * other one holds index.lock, retry for a few seconds instead of failing.
+   */
   private async git(args: string[], opts: { allowFail?: boolean } = {}): Promise<string> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.gitOnce(args, opts);
+      } catch (e) {
+        const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message);
+        if (attempt < 25 && /index\.lock|unable to lock|cannot lock ref/i.test(msg)) {
+          await new Promise((r) => setTimeout(r, 200 + Math.random() * 200));
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
+  private async gitOnce(args: string[], opts: { allowFail?: boolean }): Promise<string> {
     try {
       const { stdout } = await exec(
         'git',
@@ -42,7 +61,8 @@ export class Git {
       );
       return stdout;
     } catch (e) {
-      if (opts.allowFail) return '';
+      const msg = String((e as { stderr?: string }).stderr ?? '');
+      if (opts.allowFail && !/index\.lock|unable to lock/i.test(msg)) return '';
       throw e;
     }
   }

@@ -34,6 +34,31 @@ jobs:
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
 
+  web:
+    name: Web UI (typecheck + tests + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mcp/package-lock.json
+            web/package-lock.json
+      - run: npm ci
+        working-directory: mcp
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: web
+
   shell:
     name: Shell scripts + compose
     runs-on: ubuntu-latest
@@ -51,7 +76,7 @@ jobs:
 
   images:
     name: Image ${{ matrix.image }}
-    needs: [mcp, shell]
+    needs: [mcp, web, shell]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,7 +85,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [mcp, backup, couchdb-init]
+        include:
+          - { image: mcp, context: mcp, file: mcp/Dockerfile }
+          - { image: backup, context: backup, file: backup/Dockerfile }
+          - { image: couchdb-init, context: couchdb-init, file: couchdb-init/Dockerfile }
+          - { image: web, context: ., file: web/Dockerfile }
     env:
       PUSH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
     steps:
@@ -81,7 +110,8 @@ jobs:
       - name: Build (local, for scanning)
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           load: true
           tags: aisidian-${{ matrix.image }}:scan
           cache-from: type=gha,scope=${{ matrix.image }}
@@ -104,7 +134,8 @@ jobs:
         if: env.PUSH == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

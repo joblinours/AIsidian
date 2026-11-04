@@ -75,7 +75,11 @@ Voir [mcp.md](mcp.md) : connecteur « AIsidian » (`/mcp`) pour Claude.ai et Cla
 
 Voir [`agent/README.md`](../../agent/README.md). Trois nuits en simulation, puis `AGENT_MODE=real`.
 
-## 10. Supervision
+## 10. Interface web
+
+Renseigne `WEB_PUBLIC_URL`, ajoute la route du tunnel ([cloudflare.md](cloudflare.md)) puis ouvre l'URL : même mot de passe et même TOTP que le connecteur. Voir [web.md](web.md).
+
+## 11. Supervision
 
 Voir [supervision.md](supervision.md).
 

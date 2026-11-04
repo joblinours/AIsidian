@@ -16,6 +16,7 @@ Consultée dans l'interface Zabbix, sans notification externe. Le serveur MCP ex
 | --- | --- | --- | --- |
 | MCP disponible | HTTP agent | `http://<hôte>:9101/healthz` | code ≠ 200 pendant 5 min |
 | MCP public | Web scenario | `https://notes.example.com/healthz` | échec 3 fois |
+| Interface web | Web scenario | `https://vault.example.com/healthz` | échec 3 fois |
 | CouchDB disponible | HTTP agent | `http://<hôte>:5984/_up` (auth admin) | code ≠ 200 |
 | Conteneurs | Zabbix agent 2, plugin Docker | `docker.container_info.state.running` pour `couchdb`, `livesync`, `mcp`, `backup` (+ healthchecks Docker) | non `running` |
 | Statut AIsidian | HTTP agent (élément maître) | `http://<hôte>:9101/status` | — |

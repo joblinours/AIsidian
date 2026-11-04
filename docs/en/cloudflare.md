@@ -8,6 +8,7 @@ All external traffic goes through an existing Cloudflare Tunnel: no open port, n
 | --- | --- | --- |
 | `notes.example.com` | `http://<docker host>:8080` | MCP + OAuth. **No** Access application (an interactive login page would block Claude) |
 | `couch.example.com` | `http://<docker host>:5984` | CouchDB, behind Access |
+| `vault.example.com` | `http://<docker host>:8090` | Web UI, protected by its own password + TOTP login ([web.md](web.md)); an Access application can be added later without code change |
 
 Port `9101` (status for monitoring) must **never** be routed through the tunnel.
 

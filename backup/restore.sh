@@ -47,6 +47,10 @@ if has state && [ -d "${src}/mcp-state" ]; then
   rsync -a --delete "${src}/mcp-state/" "${DATA_DIR}/mcp-state/"
   log "mcp-state restored"
 fi
+if has state && [ -d "${src}/web-state" ] && [ -d "${DATA_DIR}/web-state" ]; then
+  rsync -a --delete "${src}/web-state/" "${DATA_DIR}/web-state/"
+  log "web-state restored"
+fi
 if has config && [ -d "${src}/config" ] && [ -w "${DATA_DIR}/config" ]; then
   rsync -a "${src}/config/" "${DATA_DIR}/config/"
   log "config restored"
