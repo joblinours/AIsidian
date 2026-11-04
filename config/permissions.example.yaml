@@ -1,0 +1,11 @@
+# Per-folder permissions for the MCP server (copy to permissions.yaml and set
+# PERMISSIONS_FILE=/config/permissions.yaml). Longest matching prefix wins;
+# matching ignores case. Without a file, these defaults apply.
+default: rw
+rules:
+  - path: 99-Système
+    access: ro
+  - path: 20-Domaines/DFIR/Certif
+    access: ro
+  - path: 20-Domaines/Pro
+    access: ro

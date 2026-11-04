@@ -1,0 +1,8 @@
+# Used by the web image (build context = repository root).
+.git
+**/node_modules
+**/dist
+test-data
+.env
+web/test
+mcp/test
